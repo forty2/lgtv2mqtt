@@ -4,6 +4,8 @@ var pkg =       require('./package.json');
 var log =       require('yalm');
 var config =    require('./config.js');
 var Mqtt =      require('mqtt');
+var util =      require('util');
+var WebSocket = require('ws');
 
 
 var mqttConnected;
@@ -50,7 +52,6 @@ mqtt.on('message', function (topic, payload) {
     log.debug('mqtt <', topic, payload);
 
     var parts = topic.split('/');
-
     switch (parts[1]) {
         case 'set':
 
@@ -69,6 +70,40 @@ mqtt.on('message', function (topic, payload) {
                 case 'launch':
                     lgtv.request('ssap://system.launcher/launch', {id: '' + payload});
                     break;
+
+                case 'move':
+                case 'drag':
+                    // TODO: untested
+                    getPointerInputSocket()
+                        .then(ws => ws.send('type:move\ndx:' + payload.dx + '\ndy:' + payload.dy + '\ndrag:' + (parts[2] === 'drag' ? 1 : 0) + '\n\n'));
+                    break;
+
+                case 'scroll':
+                    // TODO: untested
+                    getPointerInputSocket()
+                        .then(ws => ws.send('type:scroll\ndx:' + payload.dx + '\ndy:' + payload.dy + '\n\n'));
+                    break;
+
+                case 'click':
+                    // TODO: untested
+                    getPointerInputSocket().then(ws => ws.send('type:click\n\n'));
+                    break;
+                case 'button':
+                    /*
+                    * Buttons that are known to work:
+                    *    MUTE, RED, GREEN, YELLOW, BLUE, HOME, MENU, VOLUMEUP, VOLUMEDOWN,
+                    *    CC, BACK, UP, DOWN, LEFT, ENTER, DASH, 0-9, EXIT
+                    *
+                    * Probably also (but I don't have the facility to test them):
+                    *    CHANNELUP, CHANNELDOWN
+                    */
+                    log.debug("Sending " + payload + ' button');
+                    getPointerInputSocket()
+                        .then(ws =>
+                            ws.send('type:button\nname:' + (''+payload).toUpperCase() + '\n\n')
+                        );
+                    break;
+
                 default:
                     lgtv.request('ssap://' + topic.replace(config.name + '/set/', ''), payload || null);
             }
@@ -156,3 +191,25 @@ lgtv.on('error', function (err) {
     }
     lastError = str;
 });
+
+var pointerSocket;
+function getPointerInputSocket() {
+    if (pointerSocket) {
+        return Promise.resolve(pointerSocket);
+    }
+
+    return new Promise(function(resolve, reject) {
+        lgtv.request(
+            'ssap://com.webos.service.networkinput/getPointerInputSocket',
+            (err, data) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    var ws = pointerSocket = new WebSocket(data.socketPath);
+                    ws.on('open', () => resolve(ws));
+                }
+            }
+        );
+    });
+}
+

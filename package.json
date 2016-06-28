@@ -33,5 +33,10 @@
     "mqtt": "^1.5.0",
     "yalm": "^2.0.0",
     "yargs": "^3.29.0"
+  },
+  "optionalDependencies": {
+    "bufferutil": "^1.2.1",
+    "utf-8-validate": "^1.2.1",
+    "ws": "^1.1.1"
   }
 }
